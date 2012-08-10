@@ -1,8 +1,6 @@
 #include "colonydatamerger.hpp"
 #include "ui_colonydatamerger.h"
 
-//The number of connected devices
-uint32_t deviceCount = 0;
 
 ColonyDataMerger::ColonyDataMerger(QWidget *parent) :
     QMainWindow(parent),

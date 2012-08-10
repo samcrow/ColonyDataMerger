@@ -4,6 +4,9 @@
 #include <QObject>
 #include <QDebug>
 #include <QtGlobal>
+#include <QFile>
+#include <QString>
+#include <QTextStream>
 
 #include <libmtp.h>
 
@@ -25,7 +28,28 @@ public:
       */
     int getBatteryLevel();
 
-    QString toString();
+    /**
+      Upload a CSV file onto the device. The application on the device will use this as the base
+      set of colony data. This method should block while the file is being transferred.
+      @param file The file on the local filesystem to upload
+      */
+    void uploadCSVFile(QFile *file);
+
+    /**
+      Upload CSV data to the device. The text will be written to a file on the device.
+      @param text The text to upload and write
+      */
+    void uploadCSVText(QString *text);
+
+    /**
+      Read the JSON file from the device and return (a pointer to) the JSON-formatted text
+      that it contains. If the file is not there or could not be read, this method
+      returns NULL.
+      */
+    QString *getJsonText();
+
+
+    QString *toString();
 
 signals:
 

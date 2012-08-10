@@ -17,10 +17,33 @@ int MobileDevice::getBatteryLevel() {
     return actual;
 }
 
+void MobileDevice::uploadCSVFile(QFile *file) {
+
+    file->open(QIODevice::ReadOnly | QIODevice::Text);
+
+    //TODO
+    LIBMTP_file_t *remoteFile;
+
+}
+
+void MobileDevice::uploadCSVText(QString *text) {
+
+    //TODO
+    LIBMTP_file_t *remoteFile;
+}
+
+QString *MobileDevice::getJsonText() {
+    LIBMTP_file_t *remoteFile;
+    //TODO
+
+    QString *text = new QString();
+
+    return text;
+}
+
+//Static method
 QList<MobileDevice *> *MobileDevice::getDevices() {
 
-
-    uint32_t deviceCount;
     LIBMTP_mtpdevice_t *devices, *iterator;
 
     switch(LIBMTP_Get_Connected_Devices(&devices)) {
@@ -58,7 +81,7 @@ QList<MobileDevice *> *MobileDevice::getDevices() {
         break;
 
     case LIBMTP_ERROR_NONE:
-        deviceCount = LIBMTP_Number_Devices_In_List(devices);
+        qDebug() << "Successfully got devices.";
     }
 
     QList<MobileDevice *> *deviceList = new QList<MobileDevice *>();
@@ -73,8 +96,8 @@ QList<MobileDevice *> *MobileDevice::getDevices() {
     return deviceList;
 }
 
-QString MobileDevice::toString() {
-    QString string = "";
-    string += LIBMTP_Get_Modelname(device);
+QString *MobileDevice::toString() {
+    QString *string = new QString();
+    (*string) += LIBMTP_Get_Modelname(device);
     return string;
 }
