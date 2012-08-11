@@ -5,6 +5,7 @@
 #include <QDebug>
 #include <QtGlobal>
 #include <QFile>
+#include <QTemporaryFile>
 #include <QString>
 #include <QTextStream>
 
@@ -33,13 +34,15 @@ public:
       set of colony data. This method should block while the file is being transferred.
       @param file The file on the local filesystem to upload
       */
-    void uploadCSVFile(QFile *file);
+    void uploadCSV(QFile *file);
 
     /**
       Upload CSV data to the device. The text will be written to a file on the device.
       @param text The text to upload and write
       */
-    void uploadCSVText(QString *text);
+    void uploadCSV(QString *text);
+
+
 
     /**
       Read the JSON file from the device and return (a pointer to) the JSON-formatted text
@@ -59,8 +62,16 @@ protected:
 
     LIBMTP_mtpdevice_t *device;
 
+    LIBMTP_folder_t *folder;
+
     //Protected constructor to create a Device from a libmtp mtpdevice_t
-    explicit MobileDevice(LIBMTP_mtpdevice_t *inDevice);
+    MobileDevice(LIBMTP_mtpdevice_t *inDevice);
+
+    /**
+      Traverse the folder structure on the device and get a reference
+      to the folder that should contain colony data
+      */
+    LIBMTP_folder_t *getFolder();
 
 private:
 

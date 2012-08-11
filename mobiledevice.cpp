@@ -8,6 +8,7 @@ MobileDevice::MobileDevice(QObject *parent) :
 
 MobileDevice::MobileDevice(LIBMTP_mtpdevice_t *inDevice) {
     device = inDevice;
+    folder = getFolder();
 }
 
 int MobileDevice::getBatteryLevel() {
@@ -17,19 +18,43 @@ int MobileDevice::getBatteryLevel() {
     return actual;
 }
 
-void MobileDevice::uploadCSVFile(QFile *file) {
+void MobileDevice::uploadCSV(QFile *file) {
+    if(file->isOpen()) {
+        file->close();
+    }
 
-    file->open(QIODevice::ReadOnly | QIODevice::Text);
+    //Try to delete the old file, if it exists
 
-    //TODO
-    LIBMTP_file_t *remoteFile;
+
+    LIBMTP_file_t *remoteFile = LIBMTP_new_file_t();
+    remoteFile->filesize = file->size();
+
+    //Put the file in the colonies folder
+    remoteFile->parent_id = folder->folder_id;
+
+    remoteFile->filename = strdup("colonies.csv");
+    remoteFile->filetype = LIBMTP_FILETYPE_UNKNOWN;
+
+    qDebug() << "About to send file";
+    char *path = file->fileName().toAscii().data();
+    qDebug() << "File path" << path;
+    int ret = LIBMTP_Send_File_From_File(device, path, remoteFile, NULL, NULL);
+    qDebug() << "Send file returned" << ret;
+    LIBMTP_Dump_Errorstack(device);
+    LIBMTP_Clear_Errorstack(device);
 
 }
 
-void MobileDevice::uploadCSVText(QString *text) {
+void MobileDevice::uploadCSV(QString *text) {
 
-    //TODO
-    LIBMTP_file_t *remoteFile;
+    //Write the text to a temporary file so that libmtp can upload it
+    QTemporaryFile file;
+    file.open();
+    file.write(text->toUtf8());//Write that to the file
+    file.flush();//Verify that everything's actually been written
+    uploadCSV(&file);
+    file.close();
+
 }
 
 QString *MobileDevice::getJsonText() {
@@ -39,6 +64,35 @@ QString *MobileDevice::getJsonText() {
     QString *text = new QString();
 
     return text;
+}
+
+LIBMTP_folder_t *MobileDevice::getFolder() {
+
+    LIBMTP_folder_t *rootFolder = LIBMTP_Get_Folder_List(device);
+
+    //Iterate through every folder in the root directory until next->sibling is NULL
+    for(LIBMTP_folder_t *next = rootFolder->sibling; next; next = next->sibling) {
+        //If the folder's name matches "Colonies"
+        if(strcmp(next->name, "colonies") == 0) {
+            qDebug() << "Got folder" << next->folder_id << "named" << next->name;
+            return next;
+        }
+    }
+    qWarning() << "No folder named \"colonies\" found. Creating it. This operation may fail.";
+
+    int id = LIBMTP_Create_Folder(device, strdup("colonies"), 0, 0);
+
+    if(id == 0) {
+        qWarning() << "Error creating colonies folder!";
+        LIBMTP_Dump_Errorstack(device);
+        LIBMTP_Clear_Errorstack(device);
+        return NULL;
+    }
+    else {
+        qDebug() << "colonies folder with id" << id << "created successfully.";
+    }
+
+    return getFolder();
 }
 
 //Static method
