@@ -1,14 +1,21 @@
 #ifndef COLONYDATAMERGER_HPP
 #define COLONYDATAMERGER_HPP
 
+#include <QtGlobal>
 #include <QMainWindow>
 #include <QDebug>
 #include <QDateTime>
+#include <QFileDialog>
+#include <QVariant>
+#include <QVariantList>
+#include <QDir>
+#include <QStringBuilder>
 
 #include <libmtp.h>
-#include "../libcolonyutils/colony.hpp"
+#include <colony.hpp>
 
 #include "mobiledevice.hpp"
+#include "consoledialog.hpp"
 
 namespace Ui {
 class ColonyDataMerger;
@@ -21,6 +28,24 @@ class ColonyDataMerger : public QMainWindow
 public:
     explicit ColonyDataMerger(QWidget *parent = 0);
     ~ColonyDataMerger();
+
+    /**
+      Convert a QVariantMap of parsed JSON into a list of colonies
+      */
+    static QList<Colony *> *jsonToColonyList(QVariantMap json);
+
+    /**
+      Parse JSON text into a QVariantMap of parsed JSON
+      */
+    static QVariantMap parseJson(QString jsonText);
+
+private slots:
+
+    void on_uploadButton_clicked();
+
+    void on_downloadButton_clicked();
+
+    void on_mergeButton_clicked();
 
 private:
     Ui::ColonyDataMerger *ui;
@@ -48,6 +73,31 @@ private:
       If neither date is valid, returns colony1.
       */
     static Colony *chooseColony(Colony *colony1, Colony *colony2);
+
+    /**
+      Show the console dialog
+      */
+    void showConsoleDialog();
+
+    /**
+      Convert a list of colonies into CSV
+      */
+    static QString toCSV(QList<Colony *> *list);
 };
+
+//This global (non-class) stuff is necessary. It handles routing of debug messages to the console.
+namespace {
+    ConsoleDialog *activeDialog = NULL;
+}
+//Global error/debug message handler
+static void handleConsoleMessage(QtMsgType type, const char *msg) {
+    if(activeDialog) {
+        activeDialog->appendOutput(type, msg);
+    }
+    else {
+        //Just print it to the standard error stream
+        fprintf(stderr, "%s\n", msg);
+    }
+}
 
 #endif // COLONYDATAMERGER_HPP

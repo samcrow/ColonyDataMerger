@@ -8,7 +8,6 @@ MobileDevice::MobileDevice(QObject *parent) :
 
 MobileDevice::MobileDevice(LIBMTP_mtpdevice_t *inDevice) {
     device = inDevice;
-    folder = getFolder();
 }
 
 int MobileDevice::getBatteryLevel() {
@@ -19,128 +18,146 @@ int MobileDevice::getBatteryLevel() {
 }
 
 void MobileDevice::uploadCSV(QFile *file) {
-    if(file->isOpen()) {
-        file->close();
+    //Note: The file should not be closed.
+
+    LIBMTP_file_t *oldFile = getCsvFile();
+
+    if(oldFile == NULL) {
+        qWarning() << "No existing CSV file. Stopping upload.";
+        return;
     }
 
-    //Try to delete the old file, if it exists
 
+    //Remove the CSV file from the device and delete the reference from the heap
+    if(LIBMTP_Delete_Object(device, oldFile->item_id) != 0) {
 
-    LIBMTP_file_t *remoteFile = LIBMTP_new_file_t();
-    remoteFile->filesize = file->size();
+        qWarning() << "Error deleting file with ID" << oldFile->item_id;
+    } else {
+        qDebug() << "File" << oldFile->item_id << "deleted successfully.";
+    }
 
-    //Put the file in the colonies folder
-    remoteFile->parent_id = folder->folder_id;
+    //Use the data associated with the old file to upload the new file in its place
+    //(except set the file size correctly)
+    oldFile->filesize = file->size();
 
-    remoteFile->filename = strdup("colonies.csv");
-    remoteFile->filetype = LIBMTP_FILETYPE_UNKNOWN;
+    int handle = file->handle();
 
-    qDebug() << "About to send file";
-    char *path = file->fileName().toAscii().data();
-    qDebug() << "File path" << path;
-    int ret = LIBMTP_Send_File_From_File(device, path, remoteFile, NULL, NULL);
+    qDebug() << "About to send file with handle" << handle;
+    int ret = LIBMTP_Send_File_From_File_Descriptor(device, handle, oldFile, NULL, NULL);
     qDebug() << "Send file returned" << ret;
     LIBMTP_Dump_Errorstack(device);
     LIBMTP_Clear_Errorstack(device);
-
 }
 
-void MobileDevice::uploadCSV(QString *text) {
+//Currently doesn't work. TODO sometime: fix
+void MobileDevice::uploadCSV(QString text) {
 
     //Write the text to a temporary file so that libmtp can upload it
     QTemporaryFile file;
     file.open();
-    file.write(text->toUtf8());//Write that to the file
+    file.write(text.toUtf8());//Write that to the file
     file.flush();//Verify that everything's actually been written
     uploadCSV(&file);
-    file.close();
 
 }
 
-QString *MobileDevice::getJsonText() {
-    LIBMTP_file_t *remoteFile;
-    //TODO
+QString MobileDevice::getJsonText() {
 
-    QString *text = new QString();
+    LIBMTP_file_t *remoteFile = getJsonFile();
+
+    QTemporaryFile file;
+    file.open();
+
+    const char *path = file.fileName().toAscii().data();
+
+    if(LIBMTP_Get_File_To_File(device, remoteFile->item_id, path, NULL, NULL) != 0) {
+        qDebug() << "Error getting JSON file!";
+        LIBMTP_Dump_Errorstack(device);
+        LIBMTP_Clear_Errorstack(device);
+    }
+
+    QString text;
+
+    text.append(file.readAll());
+    file.close();
 
     return text;
 }
 
-LIBMTP_folder_t *MobileDevice::getFolder() {
+QVariantMap MobileDevice::getJson() {
+    QString jsonText = getJsonText();
 
-    LIBMTP_folder_t *rootFolder = LIBMTP_Get_Folder_List(device);
+    return ColonyDataMerger::parseJson(jsonText);
+}
 
-    //Iterate through every folder in the root directory until next->sibling is NULL
-    for(LIBMTP_folder_t *next = rootFolder->sibling; next; next = next->sibling) {
-        //If the folder's name matches "Colonies"
-        if(strcmp(next->name, "colonies") == 0) {
-            qDebug() << "Got folder" << next->folder_id << "named" << next->name;
-            return next;
+QList<Colony *> *MobileDevice::getColonies() {
+
+    QVariantMap json = getJson();
+
+    return ColonyDataMerger::jsonToColonyList(json);
+}
+
+LIBMTP_file_t *MobileDevice::getCsvFile() {
+    return getFileWithName("colonies.csv");
+}
+
+LIBMTP_file_t *MobileDevice::getJsonFile() {
+    return getFileWithName("colonies.json");
+}
+
+LIBMTP_file_t *MobileDevice::getFileWithName(QString name) {
+    LIBMTP_file_t *fileList = LIBMTP_Get_Filelisting_With_Callback(device, NULL, NULL);
+    //Iterate for all the next instances in the list of files
+    for(LIBMTP_file_t *file = fileList; file; file = file->next) {
+        if(strcmp(file->filename, name.toAscii().data()) == 0) {
+            qDebug() << "Found" << file->filename << "ID" << file->item_id << "Folder ID" << file->parent_id;
+            return file;
         }
     }
-    qWarning() << "No folder named \"colonies\" found. Creating it. This operation may fail.";
 
-    int id = LIBMTP_Create_Folder(device, strdup("colonies"), 0, 0);
-
-    if(id == 0) {
-        qWarning() << "Error creating colonies folder!";
-        LIBMTP_Dump_Errorstack(device);
-        LIBMTP_Clear_Errorstack(device);
-        return NULL;
-    }
-    else {
-        qDebug() << "colonies folder with id" << id << "created successfully.";
-    }
-
-    return getFolder();
+    qWarning() << "No file named" << name << "found! Returning NULL.";
+    return NULL;
 }
 
 //Static method
 QList<MobileDevice *> *MobileDevice::getDevices() {
 
-    LIBMTP_mtpdevice_t *devices, *iterator;
+    LIBMTP_mtpdevice_t *devices;
 
     switch(LIBMTP_Get_Connected_Devices(&devices)) {
     case LIBMTP_ERROR_NO_DEVICE_ATTACHED:
-        qDebug() << "No device attached! exiting.";
-        exit(1);
-        break;
+        qDebug() << "No device attached!";
+        return NULL;
     case LIBMTP_ERROR_CONNECTING:
-        qDebug() << "MTP connection error! exiting.";
-        exit(1);
-        break;
+        qDebug() << "MTP connection error!";
+        return NULL;
     case LIBMTP_ERROR_MEMORY_ALLOCATION:
-        qDebug() << "MTP memory allocation error! exiting.";
-        exit(1);
-        break;
+        qDebug() << "MTP memory allocation error!";
+        return NULL;
     case LIBMTP_ERROR_PTP_LAYER:
-        qDebug() << "PTP layer error! exiting.";
-        exit(1);
-        break;
+        qDebug() << "PTP layer error!";
+
+        return NULL;
     case LIBMTP_ERROR_USB_LAYER:
-        qDebug() << "USB layer error! exiting.";
-        exit(1);
-        break;
+        qDebug() << "USB layer error!";
+        return NULL;
     case LIBMTP_ERROR_STORAGE_FULL:
-        qDebug() << "Storage full error! exiting.";
-        exit(1);
-        break;
+        qDebug() << "Storage full error!";
+        return NULL;
     case LIBMTP_ERROR_CANCELLED:
-        qDebug() << "Operation canceled! exiting.";
-        exit(1);
-        break;
+        qDebug() << "Operation canceled!";
+        return NULL;
     case LIBMTP_ERROR_GENERAL:
-        qDebug() << "General error with libmtp! exiting.";
-        exit(1);
-        break;
+        qDebug() << "General error with libmtp!";
+        return NULL;
 
     case LIBMTP_ERROR_NONE:
-        qDebug() << "Successfully got devices.";
+        break;
     }
 
     QList<MobileDevice *> *deviceList = new QList<MobileDevice *>();
     //Iterate through the devices and add each to the list
-    for(iterator = devices; iterator != NULL; iterator = iterator->next) {
+    for(LIBMTP_mtpdevice_t *iterator = devices; iterator; iterator = iterator->next) {
         LIBMTP_Dump_Errorstack(iterator);
         LIBMTP_Clear_Errorstack(iterator);
 
@@ -150,8 +167,6 @@ QList<MobileDevice *> *MobileDevice::getDevices() {
     return deviceList;
 }
 
-QString *MobileDevice::toString() {
-    QString *string = new QString();
-    (*string) += LIBMTP_Get_Modelname(device);
-    return string;
+QString MobileDevice::toString() {
+    return QString(LIBMTP_Get_Modelname(device));
 }
