@@ -13,14 +13,14 @@ TEMPLATE = app
 SOURCES += main.cpp\
 		colonydatamerger.cpp \
 	mobiledevice.cpp \
-    consoledialog.cpp
+	consoledialog.cpp
 
 HEADERS  += colonydatamerger.hpp \
 	mobiledevice.hpp \
-    consoledialog.hpp
+	consoledialog.hpp
 
 FORMS    += colonydatamerger.ui \
-    consoledialog.ui
+	consoledialog.ui
 
 
 INCLUDEPATH += /opt/local/include
