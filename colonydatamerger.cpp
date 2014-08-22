@@ -310,19 +310,16 @@ QString ColonyDataMerger::toCSV(QList<Colony *>* list) {
     for(int i = 0, max = list->size(); i < max; i++) {
         Colony *colony = list->at(i);
 
-        if(colony->isVisited()) {
-
-            csv += QString::number(colony->getID());
-            csv += ",";
-            csv += QString::number(colony->getX());
-            csv += ",";
-            csv += QString::number(colony->getY());
-            csv += ",";
-            csv += colony->isActive() ? "A" : "NA";
-            csv += ",";
-            csv += colony->isVisited() ? "true" : "false";
-            csv += ",\n";
-        }
+        csv += QString::number(colony->getID());
+        csv += ",";
+        csv += QString::number(colony->getX());
+        csv += ",";
+        csv += QString::number(colony->getY());
+        csv += ",";
+        csv += colony->isActive() ? "A" : "NA";
+        csv += ",";
+        csv += colony->isVisited() ? "true" : "false";
+        csv += "\n";
     }
 
     return csv;
