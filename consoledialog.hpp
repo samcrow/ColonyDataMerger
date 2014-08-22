@@ -19,7 +19,7 @@ public:
     ~ConsoleDialog();
 
     //To support debugging
-    void appendOutput(QtMsgType type, const char *msg);
+    void appendOutput(QtMsgType type, const QString& msg);
 
 private:
     Ui::ConsoleDialog *ui;

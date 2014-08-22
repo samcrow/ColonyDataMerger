@@ -12,7 +12,6 @@
 #include <libmtp.h>
 #include <colony.hpp>
 
-#include "libraries/include/qjson/parser.h"
 #include "colonydatamerger.hpp"
 
 
@@ -62,7 +61,7 @@ public:
       Read the JSON file from the device and parse it into memory.
       This will return a map with "colonies" mapped to a QVariantList of colonies.
       */
-    QVariantMap getJson();
+    QJsonObject getJson();
 
     /**
       Read the JSON file from the device and parse it into a newly allocated list of newly allocated colonies.

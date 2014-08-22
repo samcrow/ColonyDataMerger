@@ -1,5 +1,6 @@
 #include "colonydatamerger.hpp"
 #include "ui_colonydatamerger.h"
+#include <map>
 
 
 ColonyDataMerger::ColonyDataMerger(QWidget *parent) :
@@ -7,9 +8,7 @@ ColonyDataMerger::ColonyDataMerger(QWidget *parent) :
     ui(new Ui::ColonyDataMerger)
 {
     ui->setupUi(this);
-    qInstallMsgHandler(&handleConsoleMessage);
-    //Fix warning about handleConsoleMessage defined but not used
-    handleConsoleMessage(QtDebugMsg, "Starting up");
+    qInstallMessageHandler(&handleConsoleMessage);
 
     LIBMTP_Init();
 
@@ -27,45 +26,43 @@ void ColonyDataMerger::showConsoleDialog() {
 
 QList<Colony *> *ColonyDataMerger::mergeColonyLists(QList<Colony *> *list1, QList<Colony *> *list2) {
 
-    //TODO sometime: Find a better algorithm. This one is not very scalable (probably O(n^2))
 
-    QList<Colony *> *finalList = new QList<Colony *>();
-
-    //Add every colony from both lists to the final list
-    for(int i = 0, max = list1->length(); i < max; i++) {
-        finalList->append(list1->at(i));
+    // Create a mapping from colony IDs to Colony instances
+    typedef std::map< int, Colony* > map_type;
+    map_type colonyMap;
+    
+    // Add all colonies from list 1 to the map
+    for(QList<Colony *>::const_iterator iter = list1->constBegin(); iter != list1->constEnd(); iter++) {
+        Colony* colony = *iter;
+        colonyMap.insert(std::make_pair(colony->getID(), colony));
     }
-    for(int i = 0, max = list2->length(); i < max; i++) {
-        finalList->append(list2->at(i));
-    }
-
-    //Go through the list and remove duplicates
-    for(int i = 0, max = finalList->length(); i < max; i++) {
-        Colony *flColony = finalList->at(i);
-        int flId = flColony->getID();
-
-        //Try to find other colonies in the list with this ID
-        for(int j = 0, jmax = finalList->length(); j < jmax; j++) {
-            Colony *innerFlColony = finalList->at(i);
-
-            //If another colony was found with the same ID
-            // (that is not the same colony object as this one
-            if(innerFlColony->getID() == flId && innerFlColony != flColony) {
-                //We have two colony pointers, same ID, one of them is better
-
-                Colony *chosenColony = chooseColony(flColony, innerFlColony);
-
-                //chosenColony is either flColony or innerFlColony
-                //Remove from the final list the one that was not chosen
-                if(chosenColony == flColony) {
-                    finalList->removeOne(innerFlColony);
-                }
-                else {
-                    //chosenColony == innerFlColony
-                    finalList->removeOne(flColony);
-                }
-            }
+    // Add all colonies from list 2 to the map, and check for duplicates
+    for(QList<Colony *>::const_iterator iter = list2->constBegin(); iter != list2->constEnd(); iter++) {
+        Colony* colony = *iter;
+        
+        // See if a colony with this ID is already in the map
+        map_type::iterator existingIterator = colonyMap.find(colony->getID());
+        if(existingIterator == colonyMap.end()) {
+            // No colony with this ID in the map
+            // Insert this colony
+            colonyMap.insert(std::make_pair(colony->getID(), colony));
         }
+        else {
+            // A colony with this ID already exists
+            Colony* existingColony = existingIterator->second;
+            
+            Colony* chosenColony = chooseColony(existingColony, colony);
+            
+            // Put the chosen colony in the map
+            colonyMap[colony->getID()] = chosenColony;
+        }
+    }
+    
+    QList<Colony *> *finalList = new QList<Colony *>();
+    finalList->reserve(colonyMap.size());
+    // Copy colony pointers from the map into the final list
+    for(map_type::iterator iter = colonyMap.begin(); iter != colonyMap.end(); iter++) {
+        finalList->append(iter->second);
     }
 
     return finalList;
@@ -251,6 +248,17 @@ void ColonyDataMerger::on_mergeButton_clicked()
         csv.close();
         qDebug() << "Done writing CSV file.";
     }
+    
+    // Write JSON
+    QString jsonPath = QFileDialog::getSaveFileName(this, "Choose where to export the JSON file", QDir::homePath(), "JSON files (*.json)");
+    if(!jsonPath.isEmpty()) {
+        QString jsonText = toJSON(workingList);
+        QFile json(jsonPath);
+        json.open(QIODevice::Truncate | QIODevice::WriteOnly | QIODevice::Text);
+        json.write(jsonText.toUtf8());
+        json.close();
+        qDebug() << "Done writing JSON file.";
+    }
 
     //Clean up
     delete workingList;
@@ -266,18 +274,17 @@ void ColonyDataMerger::on_mergeButton_clicked()
     qDebug() << "Operation successfully completed.";
 }
 
-QList<Colony *> *ColonyDataMerger::jsonToColonyList(QVariantMap json) {
+QList<Colony *> *ColonyDataMerger::jsonToColonyList(QJsonObject json) {
 
-    QVariantList jsonColonies = json.value("colonies").toList();
+    QJsonArray jsonColonies = json["colonies"].toArray();
 
     QList<Colony *> *colonies = new QList<Colony *>();
 
-    for(int i = 0, max = jsonColonies.length(); i < max; i++) {
-        QVariant jsonColony = jsonColonies.at(i);
-        QVariantMap colonyMap = jsonColony.toMap();
+    for(int i = 0, max = jsonColonies.size(); i < max; i++) {
+        QJsonObject colonyMap = jsonColonies[i].toObject();
 
         Colony *colony = new Colony();
-        colony->fromVariant(colonyMap);
+        colony->fromVariant(colonyMap.toVariantMap());
 
         //Ensure that the colony's marked as visited if it is active
         if(colony->isActive()) {
@@ -291,16 +298,11 @@ QList<Colony *> *ColonyDataMerger::jsonToColonyList(QVariantMap json) {
     return colonies;
 }
 
-QVariantMap ColonyDataMerger::parseJson(QString jsonText) {
-
-    QJson::Parser parser;
-
-    QVariant variant = parser.parse(jsonText.toUtf8());
-
-    return variant.toMap();
+QJsonObject ColonyDataMerger::parseJson(QString jsonText) {
+    return QJsonDocument::fromJson(jsonText.toUtf8()).object();
 }
 
-QString ColonyDataMerger::toCSV(QList<Colony *> *list) {
+QString ColonyDataMerger::toCSV(QList<Colony *>* list) {
     QString csv;
 
     csv += "col,E,N,active,visted,\n";
@@ -324,4 +326,30 @@ QString ColonyDataMerger::toCSV(QList<Colony *> *list) {
     }
 
     return csv;
+}
+
+QString ColonyDataMerger::toJSON(QList<Colony *>* list) {
+    QJsonObject root;
+    root["comment"] = QStringLiteral("Serialized into JSON by ColonyDataMerger");
+    
+    QJsonArray colonyArray;
+    QList<Colony *>::const_iterator iter = list->constBegin();
+    for( ; iter != list->constEnd(); iter++) {
+        colonyArray.append(QJsonObject::fromVariantMap((*iter)->toVariant()));
+    }
+    
+    root["colonies"] = colonyArray;
+    
+    QJsonDocument doc(root);
+    return doc.toJson();
+}
+
+static void handleConsoleMessage(QtMsgType type, const QMessageLogContext&, const QString& msg) {
+    if(activeDialog) {
+        activeDialog->appendOutput(type, msg);
+    }
+    else {
+        //Just print it to the standard error stream
+        fprintf(stderr, "%s\n", msg.toStdString().c_str());
+    }
 }

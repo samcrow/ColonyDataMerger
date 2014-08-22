@@ -11,9 +11,9 @@ ConsoleDialog::ConsoleDialog(QWidget *parent) :
     connect(ui->closeButton, SIGNAL(clicked()), this, SLOT(accept()));
 }
 
-void ConsoleDialog::appendOutput(QtMsgType /*type*/, const char *msg) {
+void ConsoleDialog::appendOutput(QtMsgType /*type*/, const QString& msg) {
     //Print it to stderr too.
-    fprintf(stderr, "%s\n", msg);
+    fprintf(stderr, "%s\n", msg.toStdString().c_str());
     ui->text->appendPlainText(msg);
 }
 

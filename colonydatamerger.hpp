@@ -10,6 +10,9 @@
 #include <QVariantList>
 #include <QDir>
 #include <QStringBuilder>
+#include <QJsonObject>
+#include <QJsonDocument>
+#include <QJsonArray>
 
 #include <libmtp.h>
 #include <colony.hpp>
@@ -32,12 +35,12 @@ public:
     /**
       Convert a QVariantMap of parsed JSON into a list of colonies
       */
-    static QList<Colony *> *jsonToColonyList(QVariantMap json);
+    static QList<Colony *> *jsonToColonyList(QJsonObject json);
 
     /**
       Parse JSON text into a QVariantMap of parsed JSON
       */
-    static QVariantMap parseJson(QString jsonText);
+    static QJsonObject parseJson(QString jsonText);
 
 private slots:
 
@@ -82,7 +85,9 @@ private:
     /**
       Convert a list of colonies into CSV
       */
-    static QString toCSV(QList<Colony *> *list);
+    static QString toCSV(QList<Colony *>* list);
+    
+    static QString toJSON(QList<Colony *>* list);
 };
 
 //This global (non-class) stuff is necessary. It handles routing of debug messages to the console.
@@ -90,14 +95,6 @@ namespace {
     ConsoleDialog *activeDialog = NULL;
 }
 //Global error/debug message handler
-static void handleConsoleMessage(QtMsgType type, const char *msg) {
-    if(activeDialog) {
-        activeDialog->appendOutput(type, msg);
-    }
-    else {
-        //Just print it to the standard error stream
-        fprintf(stderr, "%s\n", msg);
-    }
-}
+static void handleConsoleMessage(QtMsgType type, const QMessageLogContext&, const QString& msg);
 
 #endif // COLONYDATAMERGER_HPP

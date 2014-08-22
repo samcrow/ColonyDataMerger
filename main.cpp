@@ -1,4 +1,4 @@
-#include <QtGui/QApplication>
+#include <QApplication>
 #include "colonydatamerger.hpp"
 
 int main(int argc, char *argv[])

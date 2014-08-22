@@ -68,7 +68,7 @@ QString MobileDevice::getJsonText() {
     QTemporaryFile file;
     file.open();
 
-    const char *path = file.fileName().toAscii().data();
+    const char *path = file.fileName().toLocal8Bit().data();
 
     if(LIBMTP_Get_File_To_File(device, remoteFile->item_id, path, NULL, NULL) != 0) {
         qDebug() << "Error getting JSON file!";
@@ -84,15 +84,14 @@ QString MobileDevice::getJsonText() {
     return text;
 }
 
-QVariantMap MobileDevice::getJson() {
+QJsonObject MobileDevice::getJson() {
     QString jsonText = getJsonText();
-
     return ColonyDataMerger::parseJson(jsonText);
 }
 
 QList<Colony *> *MobileDevice::getColonies() {
 
-    QVariantMap json = getJson();
+    QJsonObject json = getJson();
 
     return ColonyDataMerger::jsonToColonyList(json);
 }
@@ -109,7 +108,7 @@ LIBMTP_file_t *MobileDevice::getFileWithName(QString name) {
     LIBMTP_file_t *fileList = LIBMTP_Get_Filelisting_With_Callback(device, NULL, NULL);
     //Iterate for all the next instances in the list of files
     for(LIBMTP_file_t *file = fileList; file; file = file->next) {
-        if(strcmp(file->filename, name.toAscii().data()) == 0) {
+        if(strcmp(file->filename, name.toLocal8Bit().data()) == 0) {
             qDebug() << "Found" << file->filename << "ID" << file->item_id << "Folder ID" << file->parent_id;
             return file;
         }
