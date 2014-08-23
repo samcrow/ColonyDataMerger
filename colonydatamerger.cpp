@@ -69,35 +69,28 @@ QList<Colony *> *ColonyDataMerger::mergeColonyLists(QList<Colony *> *list1, QLis
 }
 
 Colony *ColonyDataMerger::chooseColony(Colony *colony1, Colony *colony2) {
-    QDateTime date1 = colony1->getModifiedDate();
-    QDateTime date2 = colony2->getModifiedDate();
-
-    //Case 0: both are valid
-    if(date1.isValid() && date2.isValid()) {
-        //Colony 1 updated after colony 2
-        if(date1 > date2) {
-            return colony1;
-        }
-        //Colony 1 updated before colony 2
-        else if(date1 < date2) {
-            return colony2;
-        }
-        //Same date/time, arbitrarily return colony 1
-        else {
-            return colony1;
-        }
-    }
-
-    //Case 1: One date is valid; return the colony with the valid date
-    else if(date1.isValid() && !date2.isValid()) {
+    // Choose whichever is visited
+    if(colony1->isVisited() && !colony2->isVisited()) {
         return colony1;
     }
-    else if(date2.isValid() && !date1.isValid()) {
+    else if(colony2->isVisited() && !colony1->isVisited()) {
         return colony2;
     }
-
-    //Case 2: neither is valid
-    return colony1;
+    else {
+        // Both visited
+        // If one is active, return that one
+        if(colony1->isActive() && !colony2->isActive()) {
+            return colony1;
+        }
+        else if(colony2->isActive() && !colony1->isActive()) {
+            return colony2;
+        }
+        else {
+            // Both visited-ness and active-ness are the same
+            // Arbitrary
+            return colony1;
+        }
+    }
 }
 
 ColonyDataMerger::~ColonyDataMerger()
